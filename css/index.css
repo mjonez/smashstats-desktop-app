@@ -1,0 +1,284 @@
+body {
+  left: 0;
+  top: 0;
+  margin: 0px;
+  padding: 0px;
+  font-family: 'Play', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+
+  /* Permalink - use to edit and share this gradient: https://colorzilla.com/gradient-editor/#0984ff+0,0a78e6+44,116ac3+100 */
+  background: #0984ff; /* Old browsers */
+  background: -moz-linear-gradient(
+    -45deg,
+    #0984ff 0%,
+    #0a78e6 44%,
+    #116ac3 100%
+  ); /* FF3.6-15 */
+  background: -webkit-linear-gradient(
+    -45deg,
+    #0984ff 0%,
+    #0a78e6 44%,
+    #116ac3 100%
+  ); /* Chrome10-25,Safari5.1-6 */
+  background: linear-gradient(
+    135deg,
+    #0984ff 0%,
+    #0a78e6 44%,
+    #116ac3 100%
+  ); /* W3C, IE10+, FF16+, Chrome26+, Opera12+, Safari7+ */
+  filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#0984ff', endColorstr='#116ac3',GradientType=1 ); /* IE6-9 fallback on horizontal gradient */
+}
+
+.font {
+  font-family: 'Play', sans-serif;
+}
+
+.hidden {
+  display: none;
+}
+
+#gamesFoundSubHeading {
+  color: #21ba45;
+}
+
+#main-container {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.inner-container {
+  padding: 30px;
+  padding-top: 4px;
+  width: 100%;
+}
+
+.centered {
+  margin: 0 auto;
+  display: table;
+}
+
+.selectDirField:hover {
+  cursor: pointer;
+}
+
+#dirLoader {
+  position: relative;
+  margin: auto;
+  transform: translateX(-50%) translateY(0%);
+}
+
+#dirLoader_container {
+  display: none;
+}
+
+#errorModal {
+  display: none;
+}
+
+.container {
+  width: 90%;
+  max-width: 800px;
+  margin: 0 auto;
+  margin-bottom: 22px;
+  padding: 22px;
+  border-radius: 7px;
+  /* Permalink - use to edit and share this gradient: https://colorzilla.com/gradient-editor/#f3f9ff+0,f2f8fe+44,eef6fe+100 */
+  background: #f3f9ff; /* Old browsers */
+  background: -moz-linear-gradient(
+    -45deg,
+    #f3f9ff 0%,
+    #f2f8fe 44%,
+    #eef6fe 100%
+  ); /* FF3.6-15 */
+  background: -webkit-linear-gradient(
+    -45deg,
+    #f3f9ff 0%,
+    #f2f8fe 44%,
+    #eef6fe 100%
+  ); /* Chrome10-25,Safari5.1-6 */
+  background: linear-gradient(
+    135deg,
+    #f3f9ff 0%,
+    #f2f8fe 44%,
+    #eef6fe 100%
+  ); /* W3C, IE10+, FF16+, Chrome26+, Opera12+, Safari7+ */
+  filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#f3f9ff', endColorstr='#eef6fe',GradientType=1 ); /* IE6-9 fallback on horizontal gradient */
+
+  filter: drop-shadow(3px 9px 0.8rem rgba(0, 0, 0, 0.2));
+}
+
+@keyframes shine {
+  from {
+    -webkit-mask-position: 150%;
+  }
+
+  to {
+    -webkit-mask-position: -50%;
+  }
+}
+
+.chrome {
+  margin-top: 4px;
+  -webkit-mask-image: linear-gradient(
+    -75deg,
+    rgba(0, 0, 0, 0.7) 30%,
+    #000 50%,
+    rgba(0, 0, 0, 0.7) 70%
+  );
+  -webkit-mask-size: 200%;
+  animation: shine 7s linear infinite;
+}
+
+.chrome-subtle {
+  margin-top: 4px;
+  -webkit-mask-image: linear-gradient(
+    -75deg,
+    rgba(0, 0, 0, 1) 30%,
+    rgba(0, 0, 0, 0.7) 50%,
+    rgba(0, 0, 0, 1) 70%
+  );
+  -webkit-mask-size: 200%;
+  animation: shine 5s linear infinite;
+}
+
+.floating_anim {
+  animation: floating 3s alternate infinite ease-in;
+}
+
+@keyframes floating {
+  0% {
+    transform: scale(0.98);
+  }
+  100% {
+    transform: scale(1.03);
+  }
+}
+
+.logo_banner {
+  background-image: url('../assets/images/smashstats_logo.png');
+  -webkit-background-size: cover;
+  background-size: cover;
+  width: 400px;
+  height: 80px;
+}
+
+#flipIconContainer {
+  width: 40px;
+  height: 40px;
+  margin: 0 auto;
+}
+
+.flip-icon {
+  display: inline-block;
+  width: 100%;
+  height: 100%;
+  transition: all 0.5s;
+}
+
+#flipIconContainer.i_1 .flip-icon {
+  background: url('../assets/images/flipIcons/1.png') no-repeat;
+  -webkit-background-size: contain;
+  background-size: contain;
+}
+
+#flipIconContainer.i_2 .flip-icon {
+  background: url('../assets/images/flipIcons/2.png') no-repeat;
+  transform: scaleX(-1);
+  -webkit-background-size: contain;
+  background-size: contain;
+}
+
+#flipIconContainer.i_3 .flip-icon {
+  background: url('../assets/images/flipIcons/3.png') no-repeat;
+  -webkit-background-size: contain;
+  background-size: contain;
+}
+
+#flipIconContainer.i_4 .flip-icon {
+  background: url('../assets/images/flipIcons/4.png') no-repeat;
+  transform: scaleX(-1);
+  -webkit-background-size: contain;
+  background-size: contain;
+}
+
+#flipIconContainer.i_5 .flip-icon {
+  background: url('../assets/images/flipIcons/5.png') no-repeat;
+  -webkit-background-size: contain;
+  background-size: contain;
+}
+
+#flipIconContainer.i_6 .flip-icon {
+  background: url('../assets/images/flipIcons/6.png') no-repeat;
+  transform: scaleX(-1);
+  -webkit-background-size: contain;
+  background-size: contain;
+}
+
+#flipIconContainer.i_7 .flip-icon {
+  background: url('../assets/images/flipIcons/7.png') no-repeat;
+  -webkit-background-size: contain;
+  background-size: contain;
+}
+
+#flipIconContainer.i_8 .flip-icon {
+  background: url('../assets/images/flipIcons/8.png') no-repeat;
+  transform: scaleX(-1);
+  -webkit-background-size: contain;
+  background-size: contain;
+}
+
+#flipIconContainer.i_9 .flip-icon {
+  background: url('../assets/images/flipIcons/9.png') no-repeat;
+  -webkit-background-size: contain;
+  background-size: contain;
+}
+
+#flipIconContainer.i_10 .flip-icon {
+  background: url('../assets/images/flipIcons/10.png') no-repeat;
+  transform: scaleX(-1);
+  -webkit-background-size: contain;
+  background-size: contain;
+}
+
+#flipIconContainer.i_11 .flip-icon {
+  background: url('../assets/images/flipIcons/11.png') no-repeat;
+  -webkit-background-size: contain;
+  background-size: contain;
+}
+
+#flipIconContainer.i_12 .flip-icon {
+  background: url('../assets/images/flipIcons/12.png') no-repeat;
+  transform: scaleX(-1);
+  -webkit-background-size: contain;
+  background-size: contain;
+}
+
+#flipIconContainer.i_13 .flip-icon {
+  background: url('../assets/images/flipIcons/13.png') no-repeat;
+  -webkit-background-size: contain;
+  background-size: contain;
+}
+
+#flipIconContainer.i_14 .flip-icon {
+  background: url('../assets/images/flipIcons/14.png') no-repeat;
+  transform: scaleX(-1);
+  -webkit-background-size: contain;
+  background-size: contain;
+}
+
+#flipIconContainer.i_15 .flip-icon {
+  background: url('../assets/images/flipIcons/15.png') no-repeat;
+  -webkit-background-size: contain;
+  background-size: contain;
+}
+
+#flipIconContainer.i_16 .flip-icon {
+  background: url('../assets/images/flipIcons/16.png') no-repeat;
+  transform: scaleX(-1);
+  -webkit-background-size: contain;
+  background-size: contain;
+}

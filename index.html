@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <!-- https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP -->
+    <title>SmashStats Desktop App</title>
+    <link rel="stylesheet" href="./css/vendor/semantic.min.css" />
+    <link rel="stylesheet" href="./css/vendor/animate.min.css" />
+    <link rel="stylesheet" href="./css/vendor/hover-min.css" />
+    <link rel="stylesheet" href="./css/vendor/odometer.css" />
+    <link href="./css/fonts.css" rel="stylesheet" />
+    <link href="./css/index.css" rel="stylesheet" />
+    <script
+      type="text/javascript"
+      src="./js/vendor/jquery-3.5.1.min.js"
+    ></script>
+    <script>
+      try {
+        $ = jQuery = module.exports;
+        // If you want module.exports to be empty, uncomment:
+        // module.exports = {};
+      } catch (e) {}
+    </script>
+    <script type="text/javascript" src="./js/vendor/semantic.min.js"></script>
+    <script type="text/javascript" src="./js/vendor/odometer.min.js"></script>
+    <script type="text/javascript" src="./js/index.js"></script>
+  </head>
+  <body>
+    <div id="main-container">
+      <div class="inner-container">
+        <div id="errorModal" class="ui error message">
+          <i id="errorModalCloseBtn" class="close icon"></i>
+          <div class="header">Application Error</div>
+          <ul class="list">
+            <li id="errorModalLabel"></li>
+          </ul>
+        </div>
+        <div
+          class="animated fadeInLeft"
+          style="margin-bottom: 14px; margin-top: 4px"
+        >
+          <div class="logo_banner centered chrome hvr-shrink">
+            <div style="height: 100px"></div>
+          </div>
+        </div>
+        <div class="container animated fadeInRight">
+          <div>
+            <div class="ui form">
+              <div class="field">
+                <div>
+                  <b>SLP Directory</b> The folder where your slp files are
+                  stored. Will usually be the Slippi folder located with
+                  Dolphin.
+                </div>
+                <div
+                  id="selectDirContainer"
+                  class="ui action input focus"
+                  style="margin-top: 8px"
+                >
+                  <input
+                    id="slpDirInput"
+                    placeholder=""
+                    readonly=""
+                    type="text"
+                    class="selectDirField"
+                  />
+                  <button id="selectDir" class="ui blue icon button">
+                    <i class="folder open icon"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div
+          id="scanResults"
+          class="container animated fadeInRight hidden ui segment"
+        >
+          <div style="display: flex">
+            <div style="flex-grow: 1">
+              <h2 class="ui header">
+                <img src="./assets/images/gamecube.png" class="chrome-subtle" />
+                <div class="content font">
+                  <span id="gamesFound" class="gamesFoundOdometer"></span
+                  ><span> games found</span>
+                  <div id="gamesFoundSubHeading" class="sub header font">
+                    <span id="ngfPrefix"></span>
+                    <span id="newGamesFound" class="odo"></span
+                    ><span id="ngfPostfix"></span>
+                  </div>
+                </div>
+              </h2>
+            </div>
+            <div>
+              <button
+                id="scanResultsProcessBtn"
+                style="margin-top: 12px"
+                class="ui right labeled green icon button"
+              >
+                <i class="right arrow icon"></i>
+                Process Games
+              </button>
+            </div>
+          </div>
+          <div
+            id="processingProgress"
+            class="ui bottom attached progress"
+            data-value="0"
+            data-total="0"
+          >
+            <div class="bar"></div>
+          </div>
+        </div>
+        <!-- <div class="centered">
+          <div id="flipIconContainer" class="i_1 chrome">
+            <i class="flip-icon"></i>
+          </div>
+        </div> -->
+        <div id="dirLoader_container" class="centered animated fadeInRight">
+          <div id="dirLoader" class="ui active text inverted loader">
+            Scanning Directory
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- You can also require other files to run in this process -->
+    <script src="./renderer.js"></script>
+  </body>
+</html>
