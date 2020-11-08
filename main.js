@@ -3,23 +3,49 @@ const { ipcMain, app, BrowserWindow, dialog } = require('electron');
 const { default: SlippiGame } = require('@slippi/slippi-js');
 const fs = require('fs');
 const path = require('path');
+const filenamify = require('filenamify');
 const Store = require('electron-store');
 const store = new Store();
 
 let SLP_DIRECTORY;
 let GAME_DIRECTORY;
 let KEY;
-let LAST_GAME_COUNT;
-let UNPROCESSED_SLP;
+let UNPROCESSED_SLP = [];
 let PROCESSED_GAMES = new Set();
+let PROCESSED_GAMES_META = {};
+let PLAYER_CODE_FREQUENCIES = {};
 
 let ERROR_MESSAGE;
+
+function hashCode(str) {
+  var hash = 0,
+    i = 0,
+    len = str.length;
+  while (i < len) {
+    hash = ((hash << 5) - hash + str.charCodeAt(i++)) << 0;
+  }
+  return hash;
+}
 
 function loadStateFromStore() {
   loadSlpDirFromStore();
   loadGameDirFromStore();
   loadKeyFromStore();
-  loadLastGameCountFromStore();
+  loadMetaDataFromJson();
+}
+
+function loadMetaDataFromJson() {
+  if (gameDirIsValid()) {
+    try {
+      const metaDataFilePath = path.join(GAME_DIRECTORY, '..', 'metadata.json');
+      const rawData = fs.readFileSync(metaDataFilePath);
+      const data = JSON.parse(rawData);
+      PROCESSED_GAMES_META = data;
+    } catch (err) {
+      console.log('metadata.json not found');
+      PROCESSED_GAMES_META = {};
+    }
+  }
 }
 
 function loadKeyFromStore() {
@@ -100,26 +126,16 @@ function loadGameDirFromStore() {
   }
 }
 
-function loadLastGameCountFromStore() {
-  // get last game count from store
-  LAST_GAME_COUNT = store.get('LAST_GAME_COUNT');
-  // no last game count stored, init to 0
-  if (LAST_GAME_COUNT === undefined) {
-    LAST_GAME_COUNT = 0;
-    store.set('LAST_GAME_COUNT', LAST_GAME_COUNT);
-  }
-}
-
 function loadProcessedGames() {
+  PROCESSED_GAMES = new Set();
   if (gameDirIsValid()) {
-    fs.readdirSync(GAME_DIRECTORY, function (err, files) {
-      files.forEach(file => {
-        if (path.extname(file).toLowerCase() === '.json') {
-          const fileName = path.basename(file, '.json');
-          // add filename to processed games set
-          PROCESSED_GAMES.add(fileName);
-        }
-      });
+    const files = fs.readdirSync(GAME_DIRECTORY);
+    files.forEach(file => {
+      if (path.extname(file).toLowerCase() === '.json') {
+        const fileName = path.basename(file, '.json');
+        // add filename to processed games set
+        PROCESSED_GAMES.add(fileName);
+      }
     });
   }
 }
@@ -197,30 +213,27 @@ ipcMain.on('selectDir', async (event, arg) => {
 
 // scan SLP directory
 ipcMain.on('scanDir', async (event, arg) => {
-  UNPROCESSED_SLP = new Set();
-  if (PROCESSED_GAMES.size === 0) {
-    loadProcessedGames();
-  }
+  // load processed games
+  loadProcessedGames();
+
+  UNPROCESSED_SLP = [];
   fs.readdir(SLP_DIRECTORY, function (err, files) {
     let slpCount = 0;
-    let processedCount = 0;
     files.forEach(file => {
       if (path.extname(file).toLowerCase() === '.slp') {
-        console.log(slpCount + ' - ' + file);
         slpCount++;
         const fileName = path.basename(file, '.slp');
         if (PROCESSED_GAMES.has(fileName)) {
           // game has already been processed
-          processedCount++;
         } else {
           // game has not been processed - queue for processing
-          UNPROCESSED_SLP.add(file);
+          UNPROCESSED_SLP.push(file);
         }
       }
     });
     const info = {
       slpCount,
-      newSlpCount: slpCount - processedCount,
+      newSlpCount: UNPROCESSED_SLP.length,
     };
     event.reply('scanDirComplete', info);
   });
@@ -237,22 +250,35 @@ ipcMain.on('getError', (event, arg) => {
 });
 
 // process games request
-ipcMain.on('processGames', async (event, arg) => {
-  const totalUnprocessed = UNPROCESSED_SLP.size;
-  UNPROCESSED_SLP.forEach((file, index) => {
-    const filePath = path.join(SLP_DIRECTORY, file);
-    const fileName = path.basename(file, '.slp');
+ipcMain.on('processNextGame', (event, arg) => {
+  const totalUnprocessed = UNPROCESSED_SLP.length;
+  // all games have been processed
+  if (totalUnprocessed === 0) {
+    event.reply('processingProgressUpdate', { finished: true });
+    return;
+  }
 
+  // pop unprocessed game
+  const file = UNPROCESSED_SLP.pop();
+  const filePath = path.join(SLP_DIRECTORY, file);
+  const fileName = path.basename(file, '.slp');
+  let playerCodes = [];
+  let data;
+  try {
     const game = new SlippiGame(filePath);
     const settings = game.getSettings();
     const metadata = game.getMetadata();
+    metadata.startAtEpoch = new Date(metadata.startAt).getTime() / 1000;
     const stats = game.getStats();
     const gameEnd = game.getGameEnd();
-    //console.log(settings);
-    //console.log(metadata);
-    //console.log(metadata.players);
-    //console.log(stats);
-    //console.log(stats.overall);
+
+    for (const [player, playerObj] of Object.entries(metadata.players)) {
+      let code = playerObj.names.code;
+      if (code.length < 3) {
+        code = '';
+      }
+      playerCodes.push(code);
+    }
 
     const gameObj = {
       settings,
@@ -260,20 +286,94 @@ ipcMain.on('processGames', async (event, arg) => {
       stats,
       gameEnd,
     };
-    const data = JSON.stringify(gameObj);
+    data = JSON.stringify(gameObj);
+  } catch (err) {
+    data = JSON.stringify({});
+    playerCodes = [];
+    console.log('Error processing game: ' + file);
+  }
+  // update metadata
+  PROCESSED_GAMES_META[hashCode(fileName)] = {
+    players: playerCodes,
+    uploaded: 0,
+  };
+  // write game data to json
+  const outputFilePath = path.join(GAME_DIRECTORY, fileName);
+  const stream = fs.createWriteStream(`${outputFilePath}.json`);
+  stream.once('open', () => {
+    stream.write(data);
+    stream.end();
 
-    const outputFilePath = path.join(GAME_DIRECTORY, fileName);
-    var stream = fs.createWriteStream(`${outputFilePath}.json`);
-    stream.once('open', function (fd) {
-      stream.write(data);
-      stream.end();
+    // now write metadata.json
+    const metaOutputFilePath = path.join(GAME_DIRECTORY, '..', 'metadata');
+    const metaStream = fs.createWriteStream(`${metaOutputFilePath}.json`);
+    metaStream.once('open', () => {
+      metaStream.write(JSON.stringify(PROCESSED_GAMES_META));
+      metaStream.end();
+      //console.log(`Wrote file: ${outputFilePath}.json`);
+
+      // notify renderer of progress
+      event.reply('processingProgressUpdate', { finished: false });
     });
-    //fs.writeFile(`${outputFilePath}.json`, data, (err, data) => {
+  });
+});
 
-    console.log(`Wrote file: ${outputFilePath}.json (${index + 1})`);
-    // event.reply('processingProgressUpdate', {
-    //   current: index + 1,
-    //   total: totalUnprocessed,
-    // });
+function getPlayerCodesSortedByFrequency() {
+  const frequencies = {};
+  PROCESSED_GAMES.forEach(game => {
+    try {
+      const fileName = path.basename(game, '.json');
+      const metadata = PROCESSED_GAMES_META[hashCode(fileName)];
+      if (metadata !== undefined) {
+        // check player codes
+        metadata.players.forEach(plr => {
+          if (plr !== null && plr.length > 2) {
+            // update player code frequency
+            const currentFreq = frequencies[plr];
+            if (!currentFreq) {
+              frequencies[plr] = 1;
+            } else {
+              frequencies[plr] = currentFreq + 1;
+            }
+          }
+        });
+      }
+    } catch (error) {
+      console.log(error);
+    }
+  });
+  // sort by frequency of occurance
+  const sortable = [];
+  for (const player in frequencies) {
+    sortable.push([player, frequencies[player]]);
+  }
+  sortable.sort(function (a, b) {
+    return b[1] - a[1];
+  });
+  return sortable;
+}
+
+// filter processed games by player id and upload status
+ipcMain.on('filterGames', (event, arg) => {
+  const mostLikely = getPlayerCodesSortedByFrequency();
+  console.log(mostLikely);
+  PROCESSED_GAMES.forEach(game => {
+    try {
+      const fileName = path.basename(game, '.json');
+      const metadata = PROCESSED_GAMES_META[hashCode(fileName)];
+      if (metadata !== undefined) {
+        // game hasn't been uploaded to server yet
+        if (metadata.uploaded === 0) {
+          // check player codes
+          const [p1, p2] = metadata.players;
+          // both players have codes
+          if (p1 !== null && p2 !== null && p1.length > 2 && p2.length > 2) {
+            //console.log(game + ' is valid');
+          }
+        }
+      }
+    } catch (error) {
+      console.log(error);
+    }
   });
 });

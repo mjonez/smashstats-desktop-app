@@ -72,21 +72,19 @@
             </div>
           </div>
         </div>
-        <div
-          id="scanResults"
-          class="container animated fadeInRight hidden ui segment"
-        >
+        <div id="scanResults" class="container animated fadeInRight hidden">
           <div style="display: flex">
             <div style="flex-grow: 1">
               <h2 class="ui header">
-                <img src="./assets/images/gamecube.png" class="chrome-subtle" />
+                <img
+                  src="./assets/images/gamecube.png"
+                  class="chrome-subtle hvr-shrink"
+                />
                 <div class="content font">
                   <span id="gamesFound" class="gamesFoundOdometer"></span
                   ><span> games found</span>
                   <div id="gamesFoundSubHeading" class="sub header font">
-                    <span id="ngfPrefix"></span>
-                    <span id="newGamesFound" class="odo"></span
-                    ><span id="ngfPostfix"></span>
+                    <span id="ngfLabel"></span>
                   </div>
                 </div>
               </h2>
@@ -102,15 +100,22 @@
               </button>
             </div>
           </div>
+        </div>
+        <div class="progress-container">
           <div
-            id="processingProgress"
-            class="ui bottom attached progress"
+            class="ui indicating progress"
             data-value="0"
             data-total="0"
+            id="processingProgress"
           >
             <div class="bar"></div>
+            <div
+              class="label chrome unselectable"
+              style="color: rgb(239, 239, 239); margin-top: 14px"
+            ></div>
           </div>
         </div>
+
         <!-- <div class="centered">
           <div id="flipIconContainer" class="i_1 chrome">
             <i class="flip-icon"></i>

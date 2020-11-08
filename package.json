@@ -20,7 +20,8 @@
     "electron": "^10.1.5"
   },
   "dependencies": {
+    "@slippi/slippi-js": "5.0.5",
     "electron-store": "^6.0.1",
-    "@slippi/slippi-js": "5.0.5"
+    "filenamify": "^4.2.0"
   }
 }

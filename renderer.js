@@ -1,4 +1,5 @@
 const { ipcRenderer } = require('electron');
+let totalUnprocessedGameCount = 0;
 init();
 
 function init() {
@@ -22,25 +23,33 @@ ipcRenderer.on('setDir', (event, args) => {
   // hide scan results and show loader
   $('#scanResults').hide();
   $('#dirLoader_container').fadeIn(500);
+
+  // hide process progress bar
+  $('.progress-container').hide();
 });
 
 ipcRenderer.on('scanDirComplete', (event, { slpCount, newSlpCount }) => {
+  totalUnprocessedGameCount = newSlpCount;
   $('#gamesFound').html(slpCount);
   // no new games
-  if (newSlpCount <= 0) {
-    // clear label
-    $('#ngfPrefix').html();
-    $('#newGamesFound').html();
-    $('#ngfPostfix').html();
-    // hide progression button
+  if (totalUnprocessedGameCount <= 0) {
+    // processed games label
+    $('#ngfLabel').html(
+      `<i class="check icon" style="margin-right: 0"></i> All games processed`
+    );
+    // hide process button
     $('#scanResultsProcessBtn').hide();
+
+    setTimeout(() => {
+      requestGameFiltering();
+    }, 300);
   }
   // new games
   else {
-    $('#ngfPrefix').html('+');
-    $('#newGamesFound').html(newSlpCount);
-    $('#ngfPostfix').html(' since last upload');
+    $('#ngfLabel').html(`${totalUnprocessedGameCount} new games`);
     $('#scanResultsProcessBtn').show();
+    $('#scanResultsProcessBtn').prop('disabled', false);
+    $('#scanResultsProcessBtn').removeClass('loading');
   }
 
   setTimeout(() => {
@@ -56,14 +65,39 @@ ipcRenderer.on('error', (event, args) => {
   $('#errorModal').fadeIn(500);
 });
 
-ipcRenderer.on('processingProgressUpdate', (event, { current, total }) => {
-  console.log('current: ' + current + ' | total: ' + total);
-  $('#processingProgress').progress('set total', total);
-  $('#processingProgress').progress('set progress', current);
-  $('#scanResultsProcessBtn').text(
-    $('#processingProgress').progress('get value')
-  );
+ipcRenderer.on('processingProgressUpdate', (event, { finished }) => {
+  // all games have been processed
+  if (finished) {
+    $('#processingProgress').progress('complete');
+    $('#scanResultsProcessBtn').removeClass('loading');
+    $('#scanResultsProcessBtn').hide();
+    // processed games label
+    $('#ngfLabel').html(
+      `<i class="check icon" style="margin-right: 0"></i> All games processed`
+    );
+    setTimeout(() => {
+      $('.progress-container').fadeOut(400);
+    }, 500);
+    setTimeout(() => {
+      requestGameFiltering();
+    }, 700);
+  }
+  // still games needing to be processed
+  else {
+    $('#processingProgress').progress('increment');
+    const remainingGames = $('#processingProgress').progress('get value');
+    $('#scanResultsProcessBtn').addClass('loading');
+
+    // request next game to be processed
+    setTimeout(() => {
+      ipcRenderer.send('processNextGame', '');
+    }, 50);
+  }
 });
+
+function requestGameFiltering() {
+  ipcRenderer.send('filterGames', '');
+}
 
 // open dir explorer btn
 $('#selectDirContainer').on('click', () => {
@@ -75,6 +109,15 @@ $('#errorModalCloseBtn').on('click', () => {
 });
 // game process btn
 $('#scanResultsProcessBtn').on('click', () => {
-  ipcRenderer.send('processGames', '');
+  $('#scanResultsProcessBtn').prop('disabled', true);
   $('#processingProgress').progress('reset');
+  $('#processingProgress').progress({
+    total: totalUnprocessedGameCount,
+    text: {
+      active: 'Processed {value} of {total} games',
+      success: 'All games have been processed!',
+    },
+  });
+  $('.progress-container').fadeIn(1400);
+  ipcRenderer.send('processNextGame', '');
 });

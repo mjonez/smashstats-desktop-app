@@ -31,6 +31,10 @@ body {
   filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#0984ff', endColorstr='#116ac3',GradientType=1 ); /* IE6-9 fallback on horizontal gradient */
 }
 
+.unselectable {
+  user-select: none;
+}
+
 .font {
   font-family: 'Play', sans-serif;
 }
@@ -76,6 +80,14 @@ body {
 }
 
 #errorModal {
+  display: none;
+}
+
+.progress-container {
+  width: 90%;
+  max-width: 800px;
+  margin: 0 auto;
+  height: 100px;
   display: none;
 }
 
