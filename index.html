@@ -23,9 +23,8 @@
     </script>
     <script type="text/javascript" src="./js/vendor/semantic.min.js"></script>
     <script type="text/javascript" src="./js/vendor/odometer.min.js"></script>
-    <script type="text/javascript" src="./js/index.js"></script>
   </head>
-  <body>
+  <body class="is-preload">
     <div id="main-container">
       <div class="inner-container">
         <div id="errorModal" class="ui error message">
@@ -37,7 +36,7 @@
         </div>
         <div
           class="animated fadeInLeft"
-          style="margin-bottom: 14px; margin-top: 4px"
+          style="margin-bottom: 30px; margin-top: 19px"
         >
           <div class="logo_banner centered chrome hvr-shrink">
             <div style="height: 100px"></div>
@@ -126,10 +125,56 @@
             Scanning Directory
           </div>
         </div>
+        <div id="playerSelection" class="container animated fadeInLeft hidden">
+          <div style="display: flex">
+            <div style="flex-grow: 1">
+              <h2 class="ui header">
+                <img
+                  src="./assets/images/user.png"
+                  class="chrome-subtle hvr-shrink"
+                />
+                <div class="content font">
+                  <span id="playerChangeBtn" class="hvr-shrink"></span>
+                  <div
+                    id="playerQuestionSubHeading"
+                    class="sub header font"
+                  ></div>
+                </div>
+              </h2>
+            </div>
+            <div>
+              <button
+                id="uploadGamesBtn"
+                style="margin-top: 12px"
+                class="ui right labeled green icon button"
+              >
+                <i class="upload icon"></i>
+                Upload Games
+              </button>
+            </div>
+          </div>
+        </div>
+        <div id="playerCodesModal" class="ui small modal">
+          <div class="header">Select your connect code</div>
+          <div id="playerCodesModalContent" class="scrolling content">
+            <div style="width: 48%" class="playercode-container hvr-shrink">
+              <div class="container playercode">
+                <h3 class="ui header">
+                  <img src="./assets/images/user.png" />
+                  <div class="content font">
+                    <span>BRRY#999</span>
+                    <div class="sub header font subtext">1000 valid games</div>
+                  </div>
+                </h3>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
     <!-- You can also require other files to run in this process -->
-    <script src="./renderer.js"></script>
+    <script type="text/javascript" src="./js/index.js"></script>
+    <script type="text/javascript" src="./renderer.js"></script>
   </body>
 </html>

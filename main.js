@@ -13,7 +13,7 @@ let KEY;
 let UNPROCESSED_SLP = [];
 let PROCESSED_GAMES = new Set();
 let PROCESSED_GAMES_META = {};
-let PLAYER_CODE_FREQUENCIES = {};
+let SELECTED_PLAYER_CODE = '';
 
 let ERROR_MESSAGE;
 
@@ -31,6 +31,7 @@ function loadStateFromStore() {
   loadSlpDirFromStore();
   loadGameDirFromStore();
   loadKeyFromStore();
+  loadSelectedPlayerCodeFromStore();
   loadMetaDataFromJson();
 }
 
@@ -51,6 +52,20 @@ function loadMetaDataFromJson() {
 function loadKeyFromStore() {
   // get key from store (may return undefined if no uploads have been made)
   KEY = store.get('KEY');
+}
+
+function loadSelectedPlayerCodeFromStore() {
+  const code = store.get('SELECTED_PLAYER_CODE');
+  setSelectedPlayerCode(code);
+}
+
+function setSelectedPlayerCode(code) {
+  if (code === undefined || code === null) {
+    SELECTED_PLAYER_CODE = '';
+  } else {
+    SELECTED_PLAYER_CODE = code;
+  }
+  store.set('SELECTED_PLAYER_CODE', SELECTED_PLAYER_CODE);
 }
 
 function loadSlpDirFromStore() {
@@ -151,8 +166,8 @@ function gameDirIsValid() {
 function createWindow() {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
-    width: 960,
-    height: 740,
+    width: 1100,
+    height: 720,
     webPreferences: { nodeIntegration: true, enableRemoteModule: true },
   });
 
@@ -318,7 +333,7 @@ ipcMain.on('processNextGame', (event, arg) => {
   });
 });
 
-function getPlayerCodesSortedByFrequency() {
+function getCodeGameFreqs() {
   const frequencies = {};
   PROCESSED_GAMES.forEach(game => {
     try {
@@ -342,6 +357,13 @@ function getPlayerCodesSortedByFrequency() {
       console.log(error);
     }
   });
+  return frequencies;
+}
+
+function getPlayerCodesSortedByFrequency() {
+  // refresh processed games
+  loadProcessedGames();
+  const frequencies = getCodeGameFreqs();
   // sort by frequency of occurance
   const sortable = [];
   for (const player in frequencies) {
@@ -353,10 +375,75 @@ function getPlayerCodesSortedByFrequency() {
   return sortable;
 }
 
+function getValidGamesForPlayerCode(code) {
+  const frequencies = getCodeGameFreqs();
+  let games = frequencies[code];
+  if (isNaN(games)) {
+    return 0;
+  }
+  return games;
+}
+
+// get most likely player code based on frequency of occurance
+ipcMain.on('getSelectedPlayerCode', (event, arg) => {
+  let code = '';
+  let games = 0;
+  // if no playercode is selected
+  if (SELECTED_PLAYER_CODE === '') {
+    // get most likely player code based on frequency of occurance
+    const mostLikely = getPlayerCodesSortedByFrequency();
+    //console.log(mostLikely);
+    try {
+      if (mostLikely[0] && mostLikely[0][0] && mostLikely[0][1]) {
+        code = mostLikely[0][0];
+        games = mostLikely[0][1];
+      } else {
+        code = '';
+        games = 0;
+      }
+    } catch (error) {
+      code = '';
+      games = 0;
+    }
+  } else {
+    code = SELECTED_PLAYER_CODE;
+    games = getValidGamesForPlayerCode(code);
+  }
+  event.reply('selectedPlayerCode', { code, games });
+});
+
+// set selected player code from renderer selection
+ipcMain.on('selectPlayerCode', (event, code) => {
+  setSelectedPlayerCode(code);
+  const games = getValidGamesForPlayerCode(SELECTED_PLAYER_CODE);
+  event.reply('selectedPlayerCode', { code: SELECTED_PLAYER_CODE, games });
+});
+
+ipcMain.on('getAllPlayerCodes', (event, arg) => {
+  const allPlayerCodes = getPlayerCodesSortedByFrequency();
+  const allPlayerCodesFiltered = allPlayerCodes
+    .map(playerGame => {
+      let code = '';
+      let games = 0;
+      try {
+        if (playerGame[0] !== undefined && playerGame[0].length > 2) {
+          code = playerGame[0];
+        }
+        if (playerGame[1] !== undefined && playerGame[1] > 0) {
+          games = playerGame[1];
+        }
+      } catch (error) {
+        code = '';
+        games = 0;
+      }
+      return { code, games };
+    })
+    .filter(pg => pg.code !== '');
+  event.reply('allPlayerCodes', allPlayerCodesFiltered);
+});
+
 // filter processed games by player id and upload status
 ipcMain.on('filterGames', (event, arg) => {
-  const mostLikely = getPlayerCodesSortedByFrequency();
-  console.log(mostLikely);
   PROCESSED_GAMES.forEach(game => {
     try {
       const fileName = path.basename(game, '.json');

@@ -26,6 +26,9 @@ ipcRenderer.on('setDir', (event, args) => {
 
   // hide process progress bar
   $('.progress-container').hide();
+
+  // hide player games container
+  $('#playerSelection').hide();
 });
 
 ipcRenderer.on('scanDirComplete', (event, { slpCount, newSlpCount }) => {
@@ -41,8 +44,8 @@ ipcRenderer.on('scanDirComplete', (event, { slpCount, newSlpCount }) => {
     $('#scanResultsProcessBtn').hide();
 
     setTimeout(() => {
-      requestGameFiltering();
-    }, 300);
+      requestSelectedPlayerCode();
+    }, 2300);
   }
   // new games
   else {
@@ -79,7 +82,7 @@ ipcRenderer.on('processingProgressUpdate', (event, { finished }) => {
       $('.progress-container').fadeOut(400);
     }, 500);
     setTimeout(() => {
-      requestGameFiltering();
+      requestSelectedPlayerCode();
     }, 700);
   }
   // still games needing to be processed
@@ -95,8 +98,76 @@ ipcRenderer.on('processingProgressUpdate', (event, { finished }) => {
   }
 });
 
-function requestGameFiltering() {
-  ipcRenderer.send('filterGames', '');
+ipcRenderer.on('selectedPlayerCode', (event, { code, games }) => {
+  showPlayerGames(code, games);
+});
+
+ipcRenderer.on('allPlayerCodes', (event, playerCodes) => {
+  openPlayerCodeSelectionModal(playerCodes);
+});
+
+function openPlayerCodeSelectionModal(playerCodes) {
+  const content = $('#playerCodesModalContent');
+  content.empty();
+  let html = '';
+  playerCodes.forEach(plrCode => {
+    html += getPlayerCodeContainerHTML(plrCode);
+  });
+  // no valid games
+  if (playerCodes.length === 0) {
+    html = '<h2>No Valid Games</h2>';
+  }
+  content.append(html);
+  $('#playerCodesModal').modal('show');
+}
+
+function getPlayerCodeContainerHTML({ code, games }) {
+  let html = '';
+  html += `<div style="width: 48%" class="playercode-container hvr-shrink" onclick="selectPlayerCode('${code}')">`;
+  html += `<div class="container playercode">`;
+  html += `<h3 class="ui header">`;
+  html += `<img src="./assets/images/user.png" />`;
+  html += `<div class="content font">`;
+  html += `<span>${code}</span>`;
+  html += `<div class="sub header font subtext">${games} valid games</div>`;
+  html += `</div>`;
+  html += `</h3>`;
+  html += `</div>`;
+  html += `</div>`;
+  return html;
+}
+
+function selectPlayerCode(code) {
+  ipcRenderer.send('selectPlayerCode', code);
+  $('#playerCodesModal').modal('hide');
+}
+
+function showPlayerGames(code, games) {
+  $('#uploadGamesBtn').hide();
+  $('#playerSelection').show();
+  $('#playerQuestionSubHeading').removeClass('red');
+  // invalid games
+  if (code.length < 2 || games <= 0) {
+    $('#playerChangeBtn').html('No Valid Games');
+    $('#playerQuestionSubHeading').html(
+      'There were no valid games found. Only Slippi rollback games are supported.'
+    );
+    $('#playerQuestionSubHeading').addClass('red');
+  }
+  // valid games
+  else {
+    $('#playerChangeBtn').html(code);
+    $('#playerQuestionSubHeading').html(`${games} valid games`);
+    $('#uploadGamesBtn').show();
+  }
+}
+
+function requestSelectedPlayerCode() {
+  ipcRenderer.send('getSelectedPlayerCode', '');
+}
+
+function requestAllPlayerCodes() {
+  ipcRenderer.send('getAllPlayerCodes', '');
 }
 
 // open dir explorer btn
@@ -120,4 +191,8 @@ $('#scanResultsProcessBtn').on('click', () => {
   });
   $('.progress-container').fadeIn(1400);
   ipcRenderer.send('processNextGame', '');
+});
+// change player code btn
+$('#playerChangeBtn').on('click', () => {
+  requestAllPlayerCodes();
 });
