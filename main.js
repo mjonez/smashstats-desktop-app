@@ -1,6 +1,7 @@
 // Modules to control application life and create native browser window
 const { ipcMain, app, BrowserWindow, dialog } = require('electron');
 const { default: SlippiGame } = require('@slippi/slippi-js');
+const { performance } = require('perf_hooks');
 const fs = require('fs');
 const path = require('path');
 const filenamify = require('filenamify');
@@ -101,7 +102,7 @@ function loadGameDirFromStore() {
   if (
     GAME_DIRECTORY === undefined ||
     GAME_DIRECTORY === '' ||
-    !fs.existsSync(GAME_DIRECTORY)
+    !gameDirIsValid()
   ) {
     const docPath = app.getPath('documents');
     if (fs.existsSync(docPath)) {
@@ -109,8 +110,17 @@ function loadGameDirFromStore() {
       GAME_DIRECTORY = docPath;
       let gamePath = path.join(docPath, 'SmashStats');
       if (fs.existsSync(gamePath)) {
-        // game folder exists
+        // SmashStats folder exists
         GAME_DIRECTORY = gamePath;
+        gamePath = path.join(gamePath, 'Games');
+        // check Games sub-folder exists
+        if (!fs.existsSync(gamePath)) {
+          try {
+            // create 'Games' sub-directory
+            fs.mkdirSync(gamePath);
+            GAME_DIRECTORY = gamePath;
+          } catch (error) {}
+        }
       } else {
         // create 'SmashStats' directory if doesn't exist
         try {
@@ -202,12 +212,14 @@ app.on('window-all-closed', function () {
 // calls from renderer
 // get slp directory for renderer
 ipcMain.on('getDir', (event, arg) => {
+  console.log('MAIN: getDir');
   // update renderer
   event.reply('setDir', SLP_DIRECTORY);
 });
 
 // open directory selector dialog
 ipcMain.on('selectDir', async (event, arg) => {
+  console.log('MAIN: selectDir');
   //show open dialog
   const result = await dialog.showOpenDialog({
     defaultPath: '~/',
@@ -228,6 +240,7 @@ ipcMain.on('selectDir', async (event, arg) => {
 
 // scan SLP directory
 ipcMain.on('scanDir', async (event, arg) => {
+  console.log('MAIN: scanDir');
   // load processed games
   loadProcessedGames();
 
@@ -264,8 +277,19 @@ ipcMain.on('getError', (event, arg) => {
   }
 });
 
+// for calculating estimated time remaining
+let totalProcessedGames = 0;
+let totalProcessedGamesTime = 0;
+
 // process games request
 ipcMain.on('processNextGame', (event, arg) => {
+  // for estimating time remaining
+  const processStartTime = performance.now();
+  // first processNextGame call from renderer
+  if (arg === 'start') {
+    totalProcessedGames = 0;
+    totalProcessedGamesTime = 0;
+  }
   const totalUnprocessed = UNPROCESSED_SLP.length;
   // all games have been processed
   if (totalUnprocessed === 0) {
@@ -327,8 +351,17 @@ ipcMain.on('processNextGame', (event, arg) => {
       metaStream.end();
       //console.log(`Wrote file: ${outputFilePath}.json`);
 
+      const processEndTime = performance.now();
+      const timeTaken = processEndTime - processStartTime + 50;
+      totalProcessedGames++;
+      totalProcessedGamesTime += timeTaken;
+      const avgTimeTaken = totalProcessedGamesTime / totalProcessedGames;
       // notify renderer of progress
-      event.reply('processingProgressUpdate', { finished: false });
+      event.reply('processingProgressUpdate', {
+        finished: false,
+        avgTimeTaken,
+        totalProcessedGames,
+      });
     });
   });
 });
@@ -376,6 +409,8 @@ function getPlayerCodesSortedByFrequency() {
 }
 
 function getValidGamesForPlayerCode(code) {
+  // refresh processed games
+  loadProcessedGames();
   const frequencies = getCodeGameFreqs();
   let games = frequencies[code];
   if (isNaN(games)) {
@@ -386,6 +421,7 @@ function getValidGamesForPlayerCode(code) {
 
 // get most likely player code based on frequency of occurance
 ipcMain.on('getSelectedPlayerCode', (event, arg) => {
+  console.log('MAIN: getSelectedPlayerCode');
   let code = '';
   let games = 0;
   // if no playercode is selected
@@ -414,12 +450,14 @@ ipcMain.on('getSelectedPlayerCode', (event, arg) => {
 
 // set selected player code from renderer selection
 ipcMain.on('selectPlayerCode', (event, code) => {
+  console.log('MAIN: selectPlayerCode');
   setSelectedPlayerCode(code);
   const games = getValidGamesForPlayerCode(SELECTED_PLAYER_CODE);
   event.reply('selectedPlayerCode', { code: SELECTED_PLAYER_CODE, games });
 });
 
 ipcMain.on('getAllPlayerCodes', (event, arg) => {
+  console.log('MAIN: getAllPlayerCodes');
   const allPlayerCodes = getPlayerCodesSortedByFrequency();
   const allPlayerCodesFiltered = allPlayerCodes
     .map(playerGame => {
@@ -444,6 +482,7 @@ ipcMain.on('getAllPlayerCodes', (event, arg) => {
 
 // filter processed games by player id and upload status
 ipcMain.on('filterGames', (event, arg) => {
+  console.log('MAIN: filterGames');
   PROCESSED_GAMES.forEach(game => {
     try {
       const fileName = path.basename(game, '.json');

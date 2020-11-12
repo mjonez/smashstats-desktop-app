@@ -1,4 +1,6 @@
 const { ipcRenderer } = require('electron');
+const humanizeDuration = require('humanize-duration');
+
 let totalUnprocessedGameCount = 0;
 init();
 
@@ -68,35 +70,61 @@ ipcRenderer.on('error', (event, args) => {
   $('#errorModal').fadeIn(500);
 });
 
-ipcRenderer.on('processingProgressUpdate', (event, { finished }) => {
-  // all games have been processed
-  if (finished) {
-    $('#processingProgress').progress('complete');
-    $('#scanResultsProcessBtn').removeClass('loading');
-    $('#scanResultsProcessBtn').hide();
-    // processed games label
-    $('#ngfLabel').html(
-      `<i class="check icon" style="margin-right: 0"></i> All games processed`
-    );
-    setTimeout(() => {
-      $('.progress-container').fadeOut(400);
-    }, 500);
-    setTimeout(() => {
-      requestSelectedPlayerCode();
-    }, 700);
-  }
-  // still games needing to be processed
-  else {
-    $('#processingProgress').progress('increment');
-    const remainingGames = $('#processingProgress').progress('get value');
-    $('#scanResultsProcessBtn').addClass('loading');
+let processTimeDisplayUpdateInterval = 15;
+ipcRenderer.on(
+  'processingProgressUpdate',
+  (event, { finished, avgTimeTaken, totalProcessedGames }) => {
+    // all games have been processed
+    if (finished) {
+      // set to default
+      processTimeDisplayUpdateInterval = 15;
 
-    // request next game to be processed
-    setTimeout(() => {
+      $('#processTimeLabel').hide();
+      $('#processingProgress').progress('complete');
+      $('#scanResultsProcessBtn').removeClass('loading');
+      $('#scanResultsProcessBtn').hide();
+      // processed games label
+      $('#ngfLabel').html(
+        `<i class="check icon" style="margin-right: 0"></i> All games processed`
+      );
+      setTimeout(() => {
+        $('.progress-container').fadeOut(400);
+      }, 500);
+      setTimeout(() => {
+        requestSelectedPlayerCode();
+      }, 700);
+    }
+    // still games needing to be processed
+    else {
+      $('#processingProgress').progress('increment');
+      $('#scanResultsProcessBtn').addClass('loading');
+
+      if (
+        avgTimeTaken &&
+        avgTimeTaken > 0 &&
+        totalProcessedGames > 10 &&
+        totalProcessedGames % processTimeDisplayUpdateInterval === 0
+      ) {
+        const processedGames = $('#processingProgress').progress('get value');
+        const totalGames = $('#processingProgress').progress('get total');
+        const gamesLeft = totalGames - processedGames;
+        const timeLeftMs = gamesLeft * avgTimeTaken;
+        if (timeLeftMs < 58000) {
+          processTimeDisplayUpdateInterval = 4;
+        }
+        $('#processTimeRemaining').html(
+          humanizeDuration(timeLeftMs, { largest: 1, round: true })
+        );
+        if ($('#processTimeLabel').is(':hidden')) {
+          $('#processTimeLabel').fadeIn(2000);
+        }
+      }
+
+      // request next game to be processed
       ipcRenderer.send('processNextGame', '');
-    }, 50);
+    }
   }
-});
+);
 
 ipcRenderer.on('selectedPlayerCode', (event, { code, games }) => {
   showPlayerGames(code, games);
@@ -180,6 +208,7 @@ $('#errorModalCloseBtn').on('click', () => {
 });
 // game process btn
 $('#scanResultsProcessBtn').on('click', () => {
+  $('#processTimeLabel').hide();
   $('#scanResultsProcessBtn').prop('disabled', true);
   $('#processingProgress').progress('reset');
   $('#processingProgress').progress({
@@ -190,7 +219,7 @@ $('#scanResultsProcessBtn').on('click', () => {
     },
   });
   $('.progress-container').fadeIn(1400);
-  ipcRenderer.send('processNextGame', '');
+  ipcRenderer.send('processNextGame', 'start');
 });
 // change player code btn
 $('#playerChangeBtn').on('click', () => {

@@ -22,6 +22,7 @@
   "dependencies": {
     "@slippi/slippi-js": "5.0.5",
     "electron-store": "^6.0.1",
-    "filenamify": "^4.2.0"
+    "filenamify": "^4.2.0",
+    "humanize-duration": "^3.24.0"
   }
 }
