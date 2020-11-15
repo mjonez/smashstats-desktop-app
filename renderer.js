@@ -14,7 +14,24 @@ function init() {
 
   // request slippi dir input text to be set
   ipcRenderer.send('getDir', '');
+
+  // request connection status to server
+  ipcRenderer.send('getConnectionStatus', '');
+  setInterval(() => {
+    // request error message every 5 secs
+    ipcRenderer.send('getConnectionStatus', '');
+  }, 15000);
 }
+
+ipcRenderer.on('setConnectionStatus', (event, { connected }) => {
+  if (connected) {
+    $('#connectionStatusIcon').addClass('connected');
+    $('#connectionStatusText').html(`Connected to Server`);
+  } else {
+    $('#connectionStatusIcon').removeClass('connected');
+    $('#connectionStatusText').html(`Could not connect to Server`);
+  }
+});
 
 ipcRenderer.on('setDir', (event, args) => {
   // set input field text
@@ -109,14 +126,23 @@ ipcRenderer.on(
         const totalGames = $('#processingProgress').progress('get total');
         const gamesLeft = totalGames - processedGames;
         const timeLeftMs = gamesLeft * avgTimeTaken;
-        if (timeLeftMs < 58000) {
-          processTimeDisplayUpdateInterval = 4;
+        let timeRemainingText = '';
+        if (timeLeftMs <= 65000) {
+          processTimeDisplayUpdateInterval = 6;
+          timeRemainingText = '1 minute';
+        } else {
+          timeRemainingText = humanizeDuration(timeLeftMs, {
+            largest: 1,
+            round: true,
+          });
         }
-        $('#processTimeRemaining').html(
-          humanizeDuration(timeLeftMs, { largest: 1, round: true })
-        );
+        $('#processTimeRemaining').html(timeRemainingText);
         if ($('#processTimeLabel').is(':hidden')) {
           $('#processTimeLabel').fadeIn(2000);
+        }
+        // arbitrary number of games left to fade out the time remaining label
+        if (gamesLeft === 14) {
+          $('#processTimeLabel').fadeOut(2000);
         }
       }
 
@@ -132,6 +158,14 @@ ipcRenderer.on('selectedPlayerCode', (event, { code, games }) => {
 
 ipcRenderer.on('allPlayerCodes', (event, playerCodes) => {
   openPlayerCodeSelectionModal(playerCodes);
+});
+
+ipcRenderer.on('uploadInitStarted', (event, arg) => {});
+
+ipcRenderer.on('uploadInitFailed', (event, arg) => {
+  // enable upload button again
+  $('#uploadGamesBtn').prop('disabled', false);
+  $('#uploadGamesBtn').removeClass('loading');
 });
 
 function openPlayerCodeSelectionModal(playerCodes) {
@@ -186,6 +220,9 @@ function showPlayerGames(code, games) {
   else {
     $('#playerChangeBtn').html(code);
     $('#playerQuestionSubHeading').html(`${games} valid games`);
+    // enable upload button again
+    $('#uploadGamesBtn').prop('disabled', false);
+    $('#uploadGamesBtn').removeClass('loading');
     $('#uploadGamesBtn').show();
   }
 }
@@ -224,4 +261,10 @@ $('#scanResultsProcessBtn').on('click', () => {
 // change player code btn
 $('#playerChangeBtn').on('click', () => {
   requestAllPlayerCodes();
+});
+// upload games btn
+$('#uploadGamesBtn').on('click', () => {
+  $('#uploadGamesBtn').prop('disabled', true);
+  $('#uploadGamesBtn').addClass('loading');
+  ipcRenderer.send('uploadGames', '');
 });

@@ -27,7 +27,7 @@
   <body class="is-preload">
     <div id="main-container">
       <div class="inner-container">
-        <div id="errorModal" class="ui error message">
+        <div id="errorModal" class="ui error message" style="margin-top: 6px">
           <i id="errorModalCloseBtn" class="close icon"></i>
           <div class="header">Application Error</div>
           <ul class="list">
@@ -118,7 +118,7 @@
             class="process-time-label chrome unselectable"
             style="color: rgb(239, 239, 239); margin-top: 18px"
           >
-            Estimated time remaining: <span id="processTimeRemaining"></span>
+            <span id="processTimeRemaining"></span> remaining
           </div>
         </div>
 
@@ -166,6 +166,10 @@
           <div id="playerCodesModalContent" class="scrolling content"></div>
         </div>
       </div>
+    </div>
+    <div id="connectionStatusContainer">
+      <i id="connectionStatusIcon" class="circle icon unselectable"></i>
+      <div id="connectionStatusText" class="connection-text unselectable"></div>
     </div>
 
     <!-- You can also require other files to run in this process -->

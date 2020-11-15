@@ -1,16 +1,28 @@
 // Modules to control application life and create native browser window
-const { ipcMain, app, BrowserWindow, dialog } = require('electron');
+const {
+  ipcMain,
+  app,
+  BrowserWindow,
+  dialog,
+  ipcRenderer,
+} = require('electron');
 const { default: SlippiGame } = require('@slippi/slippi-js');
 const { performance } = require('perf_hooks');
+const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 const filenamify = require('filenamify');
 const Store = require('electron-store');
 const store = new Store();
+const constants = require('./constants');
+const WebSocket = require('ws');
+const smashStatsConverter = require('./SlpToSmashStatsConverter');
+const { Message, MessageStatus } = require('./Message');
+let wsClient;
 
 let SLP_DIRECTORY;
 let GAME_DIRECTORY;
-let KEY;
+let CODE_KEYS = {};
 let UNPROCESSED_SLP = [];
 let PROCESSED_GAMES = new Set();
 let PROCESSED_GAMES_META = {};
@@ -28,10 +40,20 @@ function hashCode(str) {
   return hash;
 }
 
+// exception handling
+process
+  .on('unhandledRejection', (reason, p) => {
+    console.error(reason, 'Unhandled Rejection at Promise', p);
+  })
+  .on('uncaughtException', err => {
+    console.error(err, 'Uncaught Exception thrown');
+    process.exit(1);
+  });
+
 function loadStateFromStore() {
   loadSlpDirFromStore();
   loadGameDirFromStore();
-  loadKeyFromStore();
+  loadCodeKeysFromStore();
   loadSelectedPlayerCodeFromStore();
   loadMetaDataFromJson();
 }
@@ -50,9 +72,14 @@ function loadMetaDataFromJson() {
   }
 }
 
-function loadKeyFromStore() {
-  // get key from store (may return undefined if no uploads have been made)
-  KEY = store.get('KEY');
+function loadCodeKeysFromStore() {
+  // get code keys object from store
+  const codeKeys = store.get('CODE_KEYS');
+  if (typeof codeKeys === 'object' && codeKeys !== null) {
+    CODE_KEYS = codeKeys;
+  } else {
+    CODE_KEYS = {};
+  }
 }
 
 function loadSelectedPlayerCodeFromStore() {
@@ -173,6 +200,63 @@ function gameDirIsValid() {
   );
 }
 
+function addCodeKey(code, key, id) {
+  CODE_KEYS[code] = { key, id };
+  store.set('CODE_KEYS', CODE_KEYS);
+}
+
+async function getUploadKeyId(playerCode) {
+  if (playerCode && playerCode.length < 3) {
+    console.log("Can't get key for invalid player code");
+    return null;
+  }
+  if (CODE_KEYS[playerCode] !== undefined) {
+    const { key, id } = CODE_KEYS[playerCode];
+    if (key && id) {
+      // already a valid key in store
+      return { key, id };
+    }
+  }
+  // no valid key locally, request new key from server
+  else {
+    const response = await getNewKeyFromServer(playerCode);
+    if (response === null) {
+      ERROR_MESSAGE =
+        'Could not get upload key from server. Check you are connected to the internet.';
+      return null;
+    } else {
+      // add new key to CODE_KEYS store
+      addCodeKey(response.code, response.key, response.id);
+      // return new key and id
+      return CODE_KEYS[response.code];
+    }
+  }
+}
+
+async function getNewKeyFromServer(playerCode) {
+  try {
+    const response = await axios.post(
+      `${constants.SERVER_URL}/api/player/new`,
+      { code: playerCode }
+    );
+    console.log('response.data', response.data);
+    const id = response.data.id;
+    const code = response.data.code;
+    const key = response.data.key;
+    if (id && code === playerCode && key && key.length === 36) {
+      // success
+      console.log(code + ' - ' + key + ' - ' + id);
+      return { code, key, id };
+    } else {
+      // error
+      throw Error('Could not get a new key from server');
+    }
+  } catch (error) {
+    ERROR_MESSAGE = error.message;
+    return null;
+  }
+}
+
 function createWindow() {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
@@ -193,6 +277,7 @@ function createWindow() {
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
   loadStateFromStore();
+  //wsClient = new WebSocketClient(constants.SERVER_WSS_URL);
   createWindow();
 
   app.on('activate', function () {
@@ -210,6 +295,31 @@ app.on('window-all-closed', function () {
 });
 
 // calls from renderer
+// get server connection status
+ipcMain.on('getConnectionStatus', (event, arg) => {
+  axios
+    .get(`${constants.SERVER_URL}/api/misc/ping`)
+    .then(response => {
+      if (!isNaN(response.data.time)) {
+        // success
+        event.reply('setConnectionStatus', {
+          connected: true,
+        });
+      } else {
+        // error
+        throw Error(
+          `Could not connect to server. Check you are connected to the internet.`
+        );
+      }
+    })
+    .catch(error => {
+      ERROR_MESSAGE = `Could not connect to server. Check you are connected to the internet.`;
+      event.reply('setConnectionStatus', {
+        connected: false,
+      });
+    });
+});
+
 // get slp directory for renderer
 ipcMain.on('getDir', (event, arg) => {
   console.log('MAIN: getDir');
@@ -301,40 +411,15 @@ ipcMain.on('processNextGame', (event, arg) => {
   const file = UNPROCESSED_SLP.pop();
   const filePath = path.join(SLP_DIRECTORY, file);
   const fileName = path.basename(file, '.slp');
-  let playerCodes = [];
-  let data;
-  try {
-    const game = new SlippiGame(filePath);
-    const settings = game.getSettings();
-    const metadata = game.getMetadata();
-    metadata.startAtEpoch = new Date(metadata.startAt).getTime() / 1000;
-    const stats = game.getStats();
-    const gameEnd = game.getGameEnd();
-
-    for (const [player, playerObj] of Object.entries(metadata.players)) {
-      let code = playerObj.names.code;
-      if (code.length < 3) {
-        code = '';
-      }
-      playerCodes.push(code);
-    }
-
-    const gameObj = {
-      settings,
-      metadata,
-      stats,
-      gameEnd,
-    };
-    data = JSON.stringify(gameObj);
-  } catch (err) {
-    data = JSON.stringify({});
-    playerCodes = [];
-    console.log('Error processing game: ' + file);
-  }
+  // extracts structured game data from slippi file
+  let { data, playerCodes, gameHash } = smashStatsConverter.convertSLP(
+    filePath
+  );
   // update metadata
   PROCESSED_GAMES_META[hashCode(fileName)] = {
     players: playerCodes,
     uploaded: 0,
+    hash: gameHash,
   };
   // write game data to json
   const outputFilePath = path.join(GAME_DIRECTORY, fileName);
@@ -503,3 +588,113 @@ ipcMain.on('filterGames', (event, arg) => {
     }
   });
 });
+
+// upload new processed games
+ipcMain.on('uploadGames', async (event, arg) => {
+  console.log('MAIN: uploadGames');
+  // get key for uploading
+  const resp = await getUploadKeyId(SELECTED_PLAYER_CODE);
+  if (resp !== null && resp.key && resp.id) {
+    const { key, id } = resp;
+    const gamesToUpload = [];
+    loadProcessedGames();
+    PROCESSED_GAMES.forEach(game => {
+      try {
+        const fileName = path.basename(game, '.json');
+        const metadata = PROCESSED_GAMES_META[hashCode(fileName)];
+        if (metadata !== undefined) {
+          // game hasn't been uploaded to server yet and has a valid hash
+          if (
+            metadata.uploaded === 0 &&
+            metadata.hash !== undefined &&
+            metadata.hash &&
+            metadata.hash.length > 5
+          ) {
+            // check player codes
+            const [p1, p2] = metadata.players;
+            // both players have codes and the selected player code is one of the players
+            if (
+              p1 !== null &&
+              p2 !== null &&
+              p1.length > 2 &&
+              p2.length > 2 &&
+              (p1 === SELECTED_PLAYER_CODE || p2 === SELECTED_PLAYER_CODE)
+            ) {
+              // game is valid for upload
+              const uploadInfo = {
+                filePath: game,
+                hash: metadata.hash,
+              };
+              // add game to the upload queue
+              gamesToUpload.push(uploadInfo);
+            }
+          }
+        }
+      } catch (error) {
+        console.log(error);
+      }
+    });
+    // now we have a list of games to upload
+    if (gamesToUpload.length > 0) {
+      createWebSocketClient(gamesToUpload, key, id, event);
+    } else {
+      console.log('No games to upload');
+    }
+  } else {
+    // upload error - can't get valid key
+    event.reply('uploadInitFailed', '');
+  }
+});
+
+function createWebSocketClient(gamesToUpload, key, id, event) {
+  console.log('createWebSocketClient');
+  const ws = new WebSocket(constants.SERVER_WSS_URL);
+  ws.event = event;
+
+  ws.on('open', () => {
+    const authPayload = { key, id };
+    sendMessage(new Message(MessageStatus.AUTHENTICATE, authPayload), ws);
+  });
+
+  ws.on('message', msg => {
+    parseMessage(msg, ws);
+  });
+}
+
+// sends web socket message to the server
+function sendMessage(message, ws) {
+  try {
+    // needs to be in JSON format to send
+    ws.send(JSON.stringify(message));
+  } catch (err) {
+    console.error('sendMessage ERROR', err);
+  }
+}
+
+function parseMessage(message, ws) {
+  try {
+    message = JSON.parse(message);
+  } catch (err) {
+    return;
+  }
+  // don't log heartbeats since they clutter the log
+  // if (message.status != MessageStatus.HEARTBEAT) {
+  //   console.log('Message Received: ' + message.status);
+  // }
+  switch (message.status) {
+    case MessageStatus.AUTHENTICATE:
+      processAuthenticateResponse(message.payload, ws);
+      break;
+    case MessageStatus.UPLOAD_GAME:
+      break;
+  }
+}
+
+function processAuthenticateResponse({ validated }, ws) {
+  if (validated) {
+    ws.event.reply('uploadInitStarted', '');
+  } else {
+    ERROR_MESSAGE = 'Unable to verify upload key with server';
+    ws.event.reply('uploadInitFailed', '');
+  }
+}

@@ -43,6 +43,59 @@ body {
   display: none;
 }
 
+#connectionStatusContainer:hover {
+  opacity: 1;
+}
+
+#connectionStatusContainer {
+  position: fixed;
+  bottom: 5px;
+  right: 6px;
+  opacity: 0.6;
+  transition: 0.3s;
+  border-radius: 7px;
+  color: white;
+  /* background: -webkit-linear-gradient(
+    -45deg,
+    #f3f9ff 0%,
+    #f2f8fe 44%,
+    #eef6fe 100%
+  );
+  background: linear-gradient(
+    135deg,
+    #f3f9ff 0%,
+    #f2f8fe 44%,
+    #eef6fe 100%
+  );
+
+  filter: drop-shadow(3px 9px 0.8rem rgba(0, 0, 0, 0.2));
+  border-color: rgba(0, 0, 0, 0.4);
+  border-width: 2px;
+  border-style: solid; */
+  display: inline;
+  padding: 8px;
+  text-align: center;
+}
+
+.connection-status-inner-container {
+  display: inline-block;
+  text-align: left;
+}
+
+#connectionStatusContainer .icon {
+  display: inline;
+  color: #ba2121;
+}
+
+#connectionStatusContainer .icon.connected {
+  color: #21ba45;
+  margin-right: 6px;
+}
+
+#connectionStatusContainer .connection-text {
+  display: inline;
+}
+
 #gamesFoundSubHeading {
   color: #21ba45;
 }
