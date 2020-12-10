@@ -555,6 +555,20 @@ function generateGameInfo(games) {
     return 'unknown';
   };
 
+  const getResultForPlayerStocks = (game, playerIndex) => {
+    const latestFrame = _.get(game.latestFrame, 'players') || [];
+    return determineFinalStockCountForPlayer(latestFrame, playerIndex);
+  };
+
+  const determineFinalStockCountForPlayer = (latestFrame, playerIndex) => {
+    const playerStocks = _.get(latestFrame, [
+      playerIndex,
+      'post',
+      'stocksRemaining',
+    ]);
+    return playerStocks;
+  };
+
   const determineGameWinner = (latestFrame, playerIndex, oppIndex) => {
     const playerStocks = _.get(latestFrame, [
       playerIndex,
@@ -590,6 +604,7 @@ function generateGameInfo(games) {
         player.characterColor
       ),
       gameResult: getResultForPlayer(game, player.playerIndex),
+      finalStockCount: getResultForPlayerStocks(game, player.playerIndex),
     };
   };
 

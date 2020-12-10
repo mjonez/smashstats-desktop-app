@@ -156,9 +156,36 @@
                 class="ui right labeled green icon button"
               >
                 <i class="upload icon"></i>
-                Upload Games
+                <span id="uploadGamesBtnText">Upload New Games</span>
               </button>
             </div>
+          </div>
+        </div>
+        <div
+          id="linkContainer"
+          class="container-link animated fadeInUp hidden chrome2"
+        >
+          <div id="linkText" class="link-text" onclick="requestOpenURL()"></div>
+        </div>
+        <div class="progress-container-u" style="text-align: center">
+          <div
+            class="ui indicating progress"
+            data-value="0"
+            data-total="0"
+            id="uploadProgress"
+          >
+            <div class="bar"></div>
+            <div
+              class="label chrome unselectable"
+              style="color: rgb(239, 239, 239); margin-top: 14px"
+            ></div>
+          </div>
+          <div
+            id="uploadTimeLabel"
+            class="process-time-label chrome unselectable"
+            style="color: rgb(239, 239, 239); margin-top: 18px"
+          >
+            <span id="uploadTimeRemaining"></span> remaining
           </div>
         </div>
         <div id="playerCodesModal" class="ui small modal">

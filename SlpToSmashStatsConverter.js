@@ -147,6 +147,8 @@ const convertSLP = filePath => {
       if (playerGameResult === 'winner') {
         data.winningPlayer = playerIndex;
       }
+      const finalStockCount =
+        computedStats.games[0].players[playerIndex].finalStockCount;
 
       data.players[`${playerIndex}`] = {
         playerIndex,
@@ -161,6 +163,7 @@ const convertSLP = filePath => {
           characterColor
         ),
         gameResult: playerGameResult,
+        finalStockCount,
         stats: Object.assign({}, actionCounts, overall),
       };
     });

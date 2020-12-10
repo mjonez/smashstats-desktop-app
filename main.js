@@ -1,10 +1,12 @@
 // Modules to control application life and create native browser window
+// todo: hide link when uploading new games
 const {
   ipcMain,
   app,
   BrowserWindow,
   dialog,
   ipcRenderer,
+  shell,
 } = require('electron');
 const { default: SlippiGame } = require('@slippi/slippi-js');
 const { performance } = require('perf_hooks');
@@ -28,7 +30,13 @@ let PROCESSED_GAMES = new Set();
 let PROCESSED_GAMES_META = {};
 let SELECTED_PLAYER_CODE = '';
 
+let GAMES_TO_UPLOAD = [];
+
 let ERROR_MESSAGE;
+
+function openURL(url) {
+  shell.openExternal(url);
+}
 
 function hashCode(str) {
   var hash = 0,
@@ -70,6 +78,17 @@ function loadMetaDataFromJson() {
       PROCESSED_GAMES_META = {};
     }
   }
+}
+
+function readJsonFromFile(filePath) {
+  let json = null;
+  try {
+    const rawData = fs.readFileSync(filePath);
+    json = JSON.parse(rawData);
+  } catch (err) {
+    json = null;
+  }
+  return json;
 }
 
 function loadCodeKeysFromStore() {
@@ -277,7 +296,6 @@ function createWindow() {
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
   loadStateFromStore();
-  //wsClient = new WebSocketClient(constants.SERVER_WSS_URL);
   createWindow();
 
   app.on('activate', function () {
@@ -415,10 +433,15 @@ ipcMain.on('processNextGame', (event, arg) => {
   let { data, playerCodes, gameHash } = smashStatsConverter.convertSLP(
     filePath
   );
+  // for uploaded metadata property
+  const uploadedObj = {};
+  playerCodes.forEach(pc => {
+    uploadedObj[pc] = 0;
+  });
   // update metadata
   PROCESSED_GAMES_META[hashCode(fileName)] = {
     players: playerCodes,
-    uploaded: 0,
+    uploaded: uploadedObj,
     hash: gameHash,
   };
   // write game data to json
@@ -505,6 +528,11 @@ function getValidGamesForPlayerCode(code) {
 }
 
 // get most likely player code based on frequency of occurance
+ipcMain.on('openURL', (event, url) => {
+  openURL(url);
+});
+
+// get most likely player code based on frequency of occurance
 ipcMain.on('getSelectedPlayerCode', (event, arg) => {
   console.log('MAIN: getSelectedPlayerCode');
   let code = '';
@@ -530,7 +558,13 @@ ipcMain.on('getSelectedPlayerCode', (event, arg) => {
     code = SELECTED_PLAYER_CODE;
     games = getValidGamesForPlayerCode(code);
   }
-  event.reply('selectedPlayerCode', { code, games });
+  // load games that need to be uploaded
+  loadGamesToUpload();
+  event.reply('selectedPlayerCode', {
+    code,
+    games,
+    toUploadCount: GAMES_TO_UPLOAD.length,
+  });
 });
 
 // set selected player code from renderer selection
@@ -538,7 +572,13 @@ ipcMain.on('selectPlayerCode', (event, code) => {
   console.log('MAIN: selectPlayerCode');
   setSelectedPlayerCode(code);
   const games = getValidGamesForPlayerCode(SELECTED_PLAYER_CODE);
-  event.reply('selectedPlayerCode', { code: SELECTED_PLAYER_CODE, games });
+  // load games that need to be uploaded
+  loadGamesToUpload();
+  event.reply('selectedPlayerCode', {
+    code: SELECTED_PLAYER_CODE,
+    games,
+    toUploadCount: GAMES_TO_UPLOAD.length,
+  });
 });
 
 ipcMain.on('getAllPlayerCodes', (event, arg) => {
@@ -565,21 +605,82 @@ ipcMain.on('getAllPlayerCodes', (event, arg) => {
   event.reply('allPlayerCodes', allPlayerCodesFiltered);
 });
 
-// filter processed games by player id and upload status
-ipcMain.on('filterGames', (event, arg) => {
-  console.log('MAIN: filterGames');
+// for calculating estimated time remaining
+let totalUploadedGames = 0;
+let totalUploadedGamesTime = 0;
+let uploadStartTime = 0;
+
+// upload game request
+ipcMain.on('uploadNextGame', (event, arg) => {
+  // for estimating time remaining
+  uploadStartTime = performance.now();
+  // first processNextGame call from renderer
+  if (arg === 'start') {
+    totalUploadedGames = 0;
+    totalUploadedGamesTime = 0;
+  }
+  const totalToUpload = GAMES_TO_UPLOAD.length;
+  // all games have been uploaded
+  if (totalToUpload === 0) {
+    event.reply('uploadProgressUpdate', { finished: true });
+    return;
+  }
+
+  // pop unuploaded game
+  const { filePath: fileName, hash } = GAMES_TO_UPLOAD.pop();
+  const filePath = path.join(GAME_DIRECTORY, `${fileName}.json`);
+  const gameObj = readJsonFromFile(filePath);
+
+  // hash mismatch
+  if (gameObj.hash !== hash) {
+    console.log('Error: uploadNextGame - gameObj and metadata hash mismatch');
+  }
+  // valid WebSocket client
+  else if (wsClient !== undefined && wsClient !== null) {
+    wsClient.event = event;
+    sendMessage(
+      new Message(MessageStatus.UPLOAD_GAME, { gameObj, hash, fileName }),
+      wsClient
+    );
+  }
+  // error
+  else {
+    console.log('Error: Invalid WebSocket Client');
+  }
+});
+
+function loadGamesToUpload() {
+  GAMES_TO_UPLOAD = [];
+  loadProcessedGames();
   PROCESSED_GAMES.forEach(game => {
     try {
       const fileName = path.basename(game, '.json');
       const metadata = PROCESSED_GAMES_META[hashCode(fileName)];
       if (metadata !== undefined) {
-        // game hasn't been uploaded to server yet
-        if (metadata.uploaded === 0) {
+        // game hasn't been uploaded to server yet and has a valid hash
+        if (
+          metadata.uploaded[SELECTED_PLAYER_CODE] === 0 &&
+          metadata.hash !== undefined &&
+          metadata.hash &&
+          metadata.hash.length > 5
+        ) {
           // check player codes
           const [p1, p2] = metadata.players;
-          // both players have codes
-          if (p1 !== null && p2 !== null && p1.length > 2 && p2.length > 2) {
-            //console.log(game + ' is valid');
+          // both players have codes and the selected player code is one of the players
+          if (
+            p1 !== null &&
+            p2 !== null &&
+            p1.length > 2 &&
+            p2.length > 2 &&
+            (p1 === SELECTED_PLAYER_CODE || p2 === SELECTED_PLAYER_CODE)
+          ) {
+            // game is valid for upload
+            const uploadInfo = {
+              filePath: game,
+              hash: metadata.hash,
+            };
+            // add game to the upload queue
+            GAMES_TO_UPLOAD.push(uploadInfo);
           }
         }
       }
@@ -587,56 +688,19 @@ ipcMain.on('filterGames', (event, arg) => {
       console.log(error);
     }
   });
-});
+}
 
 // upload new processed games
 ipcMain.on('uploadGames', async (event, arg) => {
+  loadGamesToUpload();
   console.log('MAIN: uploadGames');
   // get key for uploading
   const resp = await getUploadKeyId(SELECTED_PLAYER_CODE);
   if (resp !== null && resp.key && resp.id) {
     const { key, id } = resp;
-    const gamesToUpload = [];
-    loadProcessedGames();
-    PROCESSED_GAMES.forEach(game => {
-      try {
-        const fileName = path.basename(game, '.json');
-        const metadata = PROCESSED_GAMES_META[hashCode(fileName)];
-        if (metadata !== undefined) {
-          // game hasn't been uploaded to server yet and has a valid hash
-          if (
-            metadata.uploaded === 0 &&
-            metadata.hash !== undefined &&
-            metadata.hash &&
-            metadata.hash.length > 5
-          ) {
-            // check player codes
-            const [p1, p2] = metadata.players;
-            // both players have codes and the selected player code is one of the players
-            if (
-              p1 !== null &&
-              p2 !== null &&
-              p1.length > 2 &&
-              p2.length > 2 &&
-              (p1 === SELECTED_PLAYER_CODE || p2 === SELECTED_PLAYER_CODE)
-            ) {
-              // game is valid for upload
-              const uploadInfo = {
-                filePath: game,
-                hash: metadata.hash,
-              };
-              // add game to the upload queue
-              gamesToUpload.push(uploadInfo);
-            }
-          }
-        }
-      } catch (error) {
-        console.log(error);
-      }
-    });
     // now we have a list of games to upload
-    if (gamesToUpload.length > 0) {
-      createWebSocketClient(gamesToUpload, key, id, event);
+    if (GAMES_TO_UPLOAD.length > 0) {
+      createWebSocketClient(key, id, event);
     } else {
       console.log('No games to upload');
     }
@@ -646,18 +710,44 @@ ipcMain.on('uploadGames', async (event, arg) => {
   }
 });
 
-function createWebSocketClient(gamesToUpload, key, id, event) {
-  console.log('createWebSocketClient');
-  const ws = new WebSocket(constants.SERVER_WSS_URL);
-  ws.event = event;
+// upload new processed games
+ipcMain.on('getPlayerLink', (event, arg) => {
+  console.log('MAIN: getPlayerLink');
+  if (CODE_KEYS[SELECTED_PLAYER_CODE] !== undefined) {
+    const { id } = CODE_KEYS[SELECTED_PLAYER_CODE];
+    if (id && id.length === 8) {
+      axios
+        .get(`${constants.SERVER_URL}/api/player/hasuploaded/${id}`)
+        .then(response => {
+          if (response.data.uploaded) {
+            let url = constants.FRONTEND_URL;
+            url += `/${id}`;
+            // success
+            event.reply('setPlayerLink', { url, success: true });
+          } else {
+            // error
+            throw Error(`Could not verify player has uploaded games.`);
+          }
+        })
+        .catch(error => {
+          //event.reply('setPlayerLink', { url, success: false });
+        });
+    }
+  }
+});
 
-  ws.on('open', () => {
+function createWebSocketClient(key, id, event) {
+  console.log('createWebSocketClient');
+  wsClient = new WebSocket(constants.SERVER_WSS_URL);
+  wsClient.event = event;
+
+  wsClient.on('open', () => {
     const authPayload = { key, id };
-    sendMessage(new Message(MessageStatus.AUTHENTICATE, authPayload), ws);
+    sendMessage(new Message(MessageStatus.AUTHENTICATE, authPayload), wsClient);
   });
 
-  ws.on('message', msg => {
-    parseMessage(msg, ws);
+  wsClient.on('message', msg => {
+    parseMessage(msg, wsClient);
   });
 }
 
@@ -686,15 +776,54 @@ function parseMessage(message, ws) {
       processAuthenticateResponse(message.payload, ws);
       break;
     case MessageStatus.UPLOAD_GAME:
+      processUploadGameResponse(message.payload, ws);
       break;
   }
 }
 
 function processAuthenticateResponse({ validated }, ws) {
   if (validated) {
-    ws.event.reply('uploadInitStarted', '');
+    ws.event.reply('uploadInitStarted', GAMES_TO_UPLOAD.length);
   } else {
     ERROR_MESSAGE = 'Unable to verify upload key with server';
     ws.event.reply('uploadInitFailed', '');
   }
+}
+
+function processUploadGameResponse({ hash, fileName, success }, ws) {
+  if (success) {
+    success = 1;
+  } else {
+    success = 0;
+  }
+  // update metadata
+  const hashed = hashCode(fileName);
+  if (PROCESSED_GAMES_META[hashed].hash === hash) {
+    // update uploaded status for game
+    PROCESSED_GAMES_META[hashCode(fileName)].uploaded[
+      SELECTED_PLAYER_CODE
+    ] = success;
+  } else {
+    console.log('Error: metadata game hash mismatch with uploaded game');
+  }
+
+  // write metadata.json
+  const metaOutputFilePath = path.join(GAME_DIRECTORY, '..', 'metadata');
+  const metaStream = fs.createWriteStream(`${metaOutputFilePath}.json`);
+  metaStream.once('open', () => {
+    metaStream.write(JSON.stringify(PROCESSED_GAMES_META));
+    metaStream.end();
+
+    const uploadEndTime = performance.now();
+    const timeTaken = uploadEndTime - uploadStartTime + 50;
+    totalUploadedGames++;
+    totalUploadedGamesTime += timeTaken;
+    const avgTimeTaken = totalUploadedGamesTime / totalUploadedGames;
+    // notify renderer of progress
+    ws.event.reply('uploadProgressUpdate', {
+      finished: false,
+      avgTimeTaken,
+      totalUploadedGames,
+    });
+  });
 }

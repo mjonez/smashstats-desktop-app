@@ -21,6 +21,14 @@ function init() {
     // request error message every 5 secs
     ipcRenderer.send('getConnectionStatus', '');
   }, 15000);
+
+  // hide some stuff
+  // hide process progress bar
+  $('.progress-container').hide();
+  // hide upload progress bar
+  $('.progress-container-u').hide();
+  // hide link container
+  $('#linkContainer').hide();
 }
 
 ipcRenderer.on('setConnectionStatus', (event, { connected }) => {
@@ -30,6 +38,15 @@ ipcRenderer.on('setConnectionStatus', (event, { connected }) => {
   } else {
     $('#connectionStatusIcon').removeClass('connected');
     $('#connectionStatusText').html(`Could not connect to Server`);
+  }
+});
+
+ipcRenderer.on('setPlayerLink', (event, { url, success }) => {
+  if (success) {
+    // set link text
+    $('#linkText').html(url);
+    // show link container
+    $('#linkContainer').show();
   }
 });
 
@@ -48,6 +65,9 @@ ipcRenderer.on('setDir', (event, args) => {
 
   // hide player games container
   $('#playerSelection').hide();
+
+  // hide link container
+  $('#linkContainer').hide();
 });
 
 ipcRenderer.on('scanDirComplete', (event, { slpCount, newSlpCount }) => {
@@ -152,15 +172,104 @@ ipcRenderer.on(
   }
 );
 
-ipcRenderer.on('selectedPlayerCode', (event, { code, games }) => {
-  showPlayerGames(code, games);
-});
+ipcRenderer.on(
+  'selectedPlayerCode',
+  (event, { code, games, toUploadCount }) => {
+    showPlayerGames(code, games, toUploadCount);
+  }
+);
 
 ipcRenderer.on('allPlayerCodes', (event, playerCodes) => {
   openPlayerCodeSelectionModal(playerCodes);
 });
 
-ipcRenderer.on('uploadInitStarted', (event, arg) => {});
+let uploadTimeDisplayUpdateInterval = 15;
+ipcRenderer.on(
+  'uploadProgressUpdate',
+  (event, { finished, avgTimeTaken, totalUploadedGames }) => {
+    // all games have been processed
+    if (finished) {
+      // set to default
+      uploadTimeDisplayUpdateInterval = 15;
+
+      $('#uploadTimeLabel').hide();
+      $('#uploadProgress').progress('complete');
+      $('#uploadGamesBtn').removeClass('loading');
+      $('#uploadGamesBtn').hide();
+      $('#playerQuestionSubHeading').html(
+        `<i class="check icon" style="margin-right: 0"></i> All valid games uploaded`
+      );
+      // uploaded games label
+      // $('#ngfLabel').html(
+      //   `<i class="check icon" style="margin-right: 0"></i> All games processed`
+      // );
+      setTimeout(() => {
+        $('.progress-container-u').fadeOut(400, () => {
+          setTimeout(() => {
+            requestPlayerLink();
+          }, 200);
+        });
+      }, 500);
+    }
+    // still games needing to be uploaded
+    else {
+      $('#uploadProgress').progress('increment');
+      $('#uploadGamesBtn').addClass('loading');
+
+      if (
+        avgTimeTaken &&
+        avgTimeTaken > 0 &&
+        totalUploadedGames > 10 &&
+        totalUploadedGames % uploadTimeDisplayUpdateInterval === 0
+      ) {
+        const uploadedGames = $('#uploadProgress').progress('get value');
+        const totalGames = $('#uploadProgress').progress('get total');
+        const gamesLeft = totalGames - uploadedGames;
+        const timeLeftMs = gamesLeft * avgTimeTaken;
+        let timeRemainingText = '';
+        if (timeLeftMs <= 65000) {
+          uploadTimeDisplayUpdateInterval = 6;
+          timeRemainingText = '1 minute';
+        } else {
+          timeRemainingText = humanizeDuration(timeLeftMs, {
+            largest: 1,
+            round: true,
+          });
+        }
+        $('#uploadTimeRemaining').html(timeRemainingText);
+        if ($('#uploadTimeLabel').is(':hidden')) {
+          $('#uploadTimeLabel').fadeIn(2000);
+        }
+        // arbitrary number of games left to fade out the time remaining label
+        if (gamesLeft === 14) {
+          $('#uploadTimeLabel').fadeOut(2000);
+        }
+      }
+
+      // request next game to be uploaded
+      ipcRenderer.send('uploadNextGame', '');
+    }
+  }
+);
+
+ipcRenderer.on('uploadInitStarted', (event, arg) => {
+  startUpload(arg);
+});
+
+function startUpload(toUploadCount) {
+  $('#linkContainer').hide(); // hide link while we show progress bar
+  $('#uploadTimeLabel').hide();
+  $('#uploadProgress').progress('reset');
+  $('#uploadProgress').progress({
+    total: toUploadCount,
+    text: {
+      active: 'Uploaded {value} of {total} new games',
+      success: 'All games have been uploaded!',
+    },
+  });
+  $('.progress-container-u').fadeIn(1400);
+  ipcRenderer.send('uploadNextGame', 'start');
+}
 
 ipcRenderer.on('uploadInitFailed', (event, arg) => {
   // enable upload button again
@@ -204,7 +313,9 @@ function selectPlayerCode(code) {
   $('#playerCodesModal').modal('hide');
 }
 
-function showPlayerGames(code, games) {
+function showPlayerGames(code, games, toUploadCount) {
+  // hide link container
+  $('#linkContainer').hide();
   $('#uploadGamesBtn').hide();
   $('#playerSelection').show();
   $('#playerQuestionSubHeading').removeClass('red');
@@ -220,10 +331,31 @@ function showPlayerGames(code, games) {
   else {
     $('#playerChangeBtn').html(code);
     $('#playerQuestionSubHeading').html(`${games} valid games`);
-    // enable upload button again
-    $('#uploadGamesBtn').prop('disabled', false);
-    $('#uploadGamesBtn').removeClass('loading');
-    $('#uploadGamesBtn').show();
+
+    // request player link
+    setTimeout(() => {
+      requestPlayerLink();
+    }, 750);
+
+    // there are valid games queued for upload
+    if (toUploadCount > 0) {
+      let postfix = 's';
+      if (toUploadCount === 1) {
+        postfix = '';
+      }
+      // set upload button text
+      $('#uploadGamesBtnText').html(
+        `Upload ${toUploadCount} New Game${postfix}`
+      );
+      // enable upload button
+      $('#uploadGamesBtn').prop('disabled', false);
+      $('#uploadGamesBtn').removeClass('loading');
+      $('#uploadGamesBtn').show();
+    } else {
+      $('#playerQuestionSubHeading').html(
+        `<i class="check icon" style="margin-right: 0"></i> All valid games uploaded`
+      );
+    }
   }
 }
 
@@ -233,6 +365,17 @@ function requestSelectedPlayerCode() {
 
 function requestAllPlayerCodes() {
   ipcRenderer.send('getAllPlayerCodes', '');
+}
+
+function requestPlayerLink() {
+  ipcRenderer.send('getPlayerLink', '');
+}
+
+function requestOpenURL(url) {
+  if (!url) {
+    url = $('#linkText').html();
+  }
+  ipcRenderer.send('openURL', url);
 }
 
 // open dir explorer btn
