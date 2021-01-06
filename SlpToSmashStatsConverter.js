@@ -111,6 +111,17 @@ const convertSLP = filePath => {
       metadata.lastFrame,
       settings.isPAL
     );
+    // invalid/incomplete game (less than 30 seconds or no deaths)
+    if (
+      data.durationSeconds < 30 ||
+      !stats.stocks ||
+      stats.stocks.length === 0
+    ) {
+      data.isValid = false;
+    } else {
+      // valid game
+      data.isValid = true;
+    }
     data.lastFrame = metadata.lastFrame;
     data.playableFrameCount = stats.playableFrameCount;
     data.gameComplete = stats.gameComplete;

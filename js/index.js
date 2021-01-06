@@ -1,12 +1,16 @@
 // for alternating icons
 let flipIconCount = 1;
 window.setInterval(function () {
-  $('#flipIconContainer').removeClass(`i_${flipIconCount}`);
-  flipIconCount++;
-  if (flipIconCount > 16) {
-    flipIconCount = 1;
+  try {
+    $('#flipIconContainer').removeClass(`i_${flipIconCount}`);
+    flipIconCount++;
+    if (flipIconCount > 16) {
+      flipIconCount = 1;
+    }
+    $('#flipIconContainer').addClass(`i_${flipIconCount}`);
+  } catch (err) {
+    console.log(err);
   }
-  $('#flipIconContainer').addClass(`i_${flipIconCount}`);
 }, 3100);
 
 var $body = document.querySelector('body');
