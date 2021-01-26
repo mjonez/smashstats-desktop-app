@@ -61,22 +61,52 @@ process
 function loadStateFromStore() {
   loadSlpDirFromStore();
   loadGameDirFromStore();
-  loadCodeKeysFromStore();
+  //loadCodeKeysFromStore();
   loadSelectedPlayerCodeFromStore();
+  loadKeysFromJson();
   loadMetaDataFromJson();
 }
 
-function loadMetaDataFromJson() {
+function loadKeysFromJson() {
+  CODE_KEYS = null;
   if (gameDirIsValid()) {
     try {
-      const metaDataFilePath = path.join(GAME_DIRECTORY, '..', 'metadata.json');
-      const rawData = fs.readFileSync(metaDataFilePath);
+      const filePath = path.join(GAME_DIRECTORY, '..', 'keys.json');
+      const rawData = fs.readFileSync(filePath);
+      const data = JSON.parse(rawData);
+      CODE_KEYS = data;
+    } catch (err) {
+      console.log('keys.json not found');
+      CODE_KEYS = {};
+    }
+  }
+  if (typeof CODE_KEYS === 'object' && CODE_KEYS !== null) {
+    // ok
+  } else {
+    CODE_KEYS = {};
+  }
+}
+
+function loadMetaDataFromJson() {
+  PROCESSED_GAMES_META = null;
+  if (gameDirIsValid()) {
+    try {
+      const filePath = path.join(GAME_DIRECTORY, '..', 'metadata.json');
+      const rawData = fs.readFileSync(filePath);
       const data = JSON.parse(rawData);
       PROCESSED_GAMES_META = data;
     } catch (err) {
       console.log('metadata.json not found');
       PROCESSED_GAMES_META = {};
     }
+  }
+  if (
+    typeof PROCESSED_GAMES_META === 'object' &&
+    PROCESSED_GAMES_META !== null
+  ) {
+    // ok
+  } else {
+    PROCESSED_GAMES_META = {};
   }
 }
 
@@ -221,7 +251,13 @@ function gameDirIsValid() {
 
 function addCodeKey(code, key, id) {
   CODE_KEYS[code] = { key, id };
-  store.set('CODE_KEYS', CODE_KEYS);
+  // now write keys.json
+  const outputFilePath = path.join(GAME_DIRECTORY, '..', 'keys');
+  const stream = fs.createWriteStream(`${outputFilePath}.json`);
+  stream.once('open', () => {
+    stream.write(JSON.stringify(CODE_KEYS));
+    stream.end();
+  });
 }
 
 async function getUploadKeyId(playerCode) {
@@ -244,7 +280,7 @@ async function getUploadKeyId(playerCode) {
         'Could not get upload key from server. Check you are connected to the internet.';
       return null;
     } else {
-      // add new key to CODE_KEYS store
+      // add new key to CODE_KEYS (keys.json)
       addCodeKey(response.code, response.key, response.id);
       // return new key and id
       return CODE_KEYS[response.code];
